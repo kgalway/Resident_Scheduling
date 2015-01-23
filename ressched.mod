@@ -29,7 +29,8 @@
     set sphSet := {1..(numOffsites + numSph + numVgh)};
     set vghSet := {1..(numOffsites + numSph + numVgh)};
 
-    set offsiteSet := {1..numOffsites};    # we will assume that offsites form the first n entries 
+    set offsiteSet := {1..numOffsites};    
+    # we will assume that offsites form the first n entries 
     set offsiteJrSet within offsiteSet := {1..numOffsiteJr};
 
     # holiday restrictions that are set in a tabular format; both vghSet and sphSet 
@@ -105,9 +106,10 @@
     subject to constraint7a{d in daySet, r in vghSet}: vgh[d,r] <= vacay_restrictions[d,r];
     subject to constraint7b{d in daySet, r in sphSet}: sph[d,r] <= vacay_restrictions[d,r];
 
+    
 
-    solve;
-    display vghOnSiteSet;
-    display vghJrSet;
-    display sphOnSiteSet;
-    display sphJrSet;
+ solve;
+
+# a table statement that allows a different way of outputting the data, currently commented out 
+#  table tout{d in daySet, r in vghSet} OUT "CSV" "output.csv" : d, r, vgh[d,r];
+ end;
