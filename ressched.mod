@@ -59,57 +59,59 @@
 
 /* 
 		constraints 
-        type 0: vgh cannot work at sph and vice-versa
-		type 1: offsites can only be in one place at a time
-		type 2: all residents need at least two days off between shifts 
-		type 3: weekends require 2 people, weekdays 3, for both locations 
-		type 4: max one junior per site per shift 
-		type 5: offsites can only work one day a month and it has to be a weekend day 
-        type 6: on-sites work max two weekend days and a max number of shifts per month
-		type 7: holiday requests, etc. 
+        - vgh cannot work at sph and vice-versa
+		- offsites can only be in one place at a time (sph or vgh but not both)
+		- all residents need at least two days off between shifts 
+		- weekends require 2 people, weekdays 3, for both locations 
+		- max one junior per site per shift 
+		- offsites can only work one day a month and it has to be a weekend day 
+        - on-sites work a configurable max weekend days and a max number of shifts per month
+		- call requests
 */
+    subject to 
+    noSphAtVgh: sum{d in daySet, r in sphOnSiteSet} vgh[d,r] = 0;
+    noVghAtSph: sum{d in daySet, r in vghOnSiteSet} sph[d,r] = 0;
 
-    subject to constraint0a: sum{d in daySet, r in sphOnSiteSet} vgh[d,r] = 0;
-    subject to constraint0b: sum{d in daySet, r in vghOnSiteSet} sph[d,r] = 0;
+    onePlaceAtATime {d in daySet, r in offsiteSet}: sph[d,r] + vgh[d,r] <= 1;
 
-    subject to constraint1a {d in daySet, r in offsiteSet}: sph[d,r] + vgh[d,r] <= 1;
+    RestPeriodSph {d in daySet, r in sphSet: d+2 <= studyLength}: sph[d,r] + sph[d+1,r] + sph[d+2,r] <= 1;
+    RestPeriodVgh {d in daySet, r in vghSet: d+2 <= studyLength}: vgh[d,r] + vgh[d+1,r] + vgh[d+2,r] <= 1;
 
-    subject to constraint2a {d in daySet, r in sphSet: d+2 <= studyLength}: sph[d,r] + sph[d+1,r] + sph[d+2,r] <= 1;
-    subject to constraint2b {d in daySet, r in vghSet: d+2 <= studyLength}: vgh[d,r] + vgh[d+1,r] + vgh[d+2,r] <= 1;
-
-    subject to constraint3a {d in weekendSet}: sum{r in sphSet}sph[d,r] = 2;
-    subject to constraint3b {d in weekendSet}: sum{r in vghSet}vgh[d,r] = 2;
-    subject to constraint3c {d in weekdaySet}: sum{r in vghSet}vgh[d,r] = 3;
-    subject to constraint3d {d in weekdaySet}: sum{r in sphSet}sph[d,r] = 3;
-
-    subject to constraint4a {d in daySet}: sum{r in sphJrSet} sph[d,r] <= 1;
-    subject to constraint4b {d in daySet}: sum{r in vghJrSet} vgh[d,r] <= 1;
-
-    subject to constraint5a {r in offsiteSet}: sum{d in weekendSet}(sph[d,r] + vgh[d,r]) <= 1;    
-    subject to constraint5b {r in offsiteSet}: sum{d in weekdaySet}(sph[d,r] + vgh[d,r]) = 0;
-
-    subject to constraint6a{r in vghSet}:sum{d in weekendSet}vgh[d,r] <= maxWeekendShifts;
-    subject to constraint6b{r in sphSet}:sum{d in weekendSet}sph[d,r] <= maxWeekendShifts;
     
-    subject to constraint6c{r in vghSet}:sum{d in daySet}vgh[d,r] <= maxMonthlyShifts;
-    subject to constraint6d{r in sphSet}:sum{d in weekendSet}sph[d,r] <= maxMonthlyShifts;
+    # the amount of people on per shift. 2 on weekends, 3 on weekdays 
+    WeekendShiftsSph {d in weekendSet}: sum{r in sphSet}sph[d,r] = 2;
+    WeekendShiftsVgh {d in weekendSet}: sum{r in vghSet}vgh[d,r] = 2;
+    WeekdayShiftsVgh {d in weekdaySet}: sum{r in vghSet}vgh[d,r] = 3;
+    WeekdayShiftsSph {d in weekdaySet}: sum{r in sphSet}sph[d,r] = 3;
+
+    # changed these from <=1 to =1 at Shan's request on 23 Mar 2015
+    # this will not allow Seniors to cover Junior shifts 
+    JrShiftsSph {d in daySet}: sum{r in sphJrSet} sph[d,r] = 1;
+    JrShiftsVgh {d in daySet}: sum{r in vghJrSet} vgh[d,r] = 1;
     
-    subject to constraint6e{r in sphOnSiteSet}:sum{d in daySet}sph[d,r] <= maxMonthlyShifts;
-    subject to constraint6f{r in sphOnSiteSet}:sum{d in daySet}sph[d,r] >= minMonthlyShifts;
+    offSiteWeekendShifts {r in offsiteSet}: sum{d in weekendSet}(sph[d,r] + vgh[d,r]) <= 1;    
+    offSiteWeekdayShifts {r in offsiteSet}: sum{d in weekdaySet}(sph[d,r] + vgh[d,r]) = 0;
+    #offSiteWeekdayShifts {r in offsiteSet}: sum{d in weekdaySet}(sph[d,r] + vgh[d,r]) <= 1;
+    #offSiteTotalShifts {r in offsiteSet}: sum{d in daySet}(sph[d,r] + vgh[d,r]) <=1;
+
+    MaxWeekendShiftsVgh {r in vghSet}:sum{d in weekendSet} vgh[d,r] <= maxWeekendShifts;
+    MaxWeekendShiftsSph {r in sphSet}:sum{d in weekendSet} sph[d,r] <= maxWeekendShifts;
+        
+    MaxMonthlyShiftsSph {r in sphOnSiteSet}:sum{d in daySet}sph[d,r] <= maxMonthlyShifts;
+    MinMonthlyShiftsSph {r in sphOnSiteSet}:sum{d in daySet}sph[d,r] >= minMonthlyShifts;
     
-    subject to constraint6g{r in vghOnSiteSet}:sum{d in daySet}vgh[d,r] <= maxMonthlyShifts;
-    subject to constraint6h{r in vghOnSiteSet}:sum{d in daySet}vgh[d,r] >= minMonthlyShifts;
+    MaxMonthlyShiftsVgh {r in vghOnSiteSet}:sum{d in daySet}vgh[d,r] <= maxMonthlyShifts;
+    MinMonthlyShiftsVgh {r in vghOnSiteSet}:sum{d in daySet}vgh[d,r] >= minMonthlyShifts;
 
 # person-specific constraints 
 # this is the bulk holiday schedule that is pasted below
 
-    subject to constraint7a{d in daySet, r in vghSet}: vgh[d,r] <= vacay_restrictions[d,r];
-    subject to constraint7b{d in daySet, r in sphSet}: sph[d,r] <= vacay_restrictions[d,r];
+    CallRequestsVgh {d in daySet, r in vghSet}: vgh[d,r] <= vacay_restrictions[d,r];
+    CallRequestsSph {d in daySet, r in sphSet}: sph[d,r] <= vacay_restrictions[d,r];
 
-    
+   # they are on at vgh so should already be zeroed in sph schedule 
+   aiza: sph[18,34] + vgh[18,34] = 1;
+
 
  solve;
-
-# a table statement that allows a different way of outputting the data, currently commented out 
-#  table tout{d in daySet, r in vghSet} OUT "CSV" "output.csv" : d, r, vgh[d,r];
  end;
