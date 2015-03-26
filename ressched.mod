@@ -38,7 +38,7 @@
     param vacay_restrictions{d in daySet, r in sphSet};    
 
     # sphSet and vghSet are each assumed to be indexed as follows:
-    # {1.. numOffsites}, {numOffsites + 1.. numSph}, {numOffsites + numSph + 1.. numOffsites + numSph + numVgh}
+    # {1.. numOffsites}, {numOffsites + 1.. numVgh}, {numOffsites + numVgh + 1.. numOffsites + numSph + numVgh}
     # in other words, first comes the offsite set (containing its juniors), then the vghOnSiteSet (containing its
     # juniors), and then sphOnSiteSet (containing its juniors)
 
@@ -51,11 +51,17 @@
     set sphJrSet within sphSet := offsiteJrSet union sphOnSiteJrSet;
     set vghJrSet within vghSet := offsiteJrSet union vghOnSiteJrSet;
 
+    set vghOnSiteSrSet within vghSet := vghOnSiteSet diff vghOnSiteJrSet;
+    set sphOnSiteSrSet within sphSet := sphOnSiteSet diff sphOnSiteJrSet;
+
 
     var sph{d in daySet, r in sphSet} binary;    
     var vgh{d in daySet, r in vghSet} binary;
-    minimize onCallShifts: sum{d in daySet, r in sphSet}sph[d,r] + sum{d in daySet, r in vghSet}vgh[d,r];
-     
+    # minimize onCallShifts: sum{d in daySet, r in sphSet}sph[d,r] + sum{d in daySet, r in vghSet}vgh[d,r];
+    # KLG changed on 24 Mar 2015 to place highest priority on Offsites, then Jrs relative to Srs
+    minimize onCallShifts: sum{d in daySet, r in offsiteSet}(sph[d,r] + vgh[d,r]) 
+                        + 10*(sum{d in daySet, r in vghOnSiteJrSet}vgh[d,r] + sum{d in daySet, r in sphOnSiteJrSet}sph[d,r]) + 100*(sum{d in daySet, r in vghOnSiteSrSet}vgh[d,r] + sum{d in daySet, r in sphOnSiteSrSet}sph[d,r]);
+   
 
 /* 
 		constraints 
@@ -74,9 +80,8 @@
 
     onePlaceAtATime {d in daySet, r in offsiteSet}: sph[d,r] + vgh[d,r] <= 1;
 
-    RestPeriodSph {d in daySet, r in sphSet: d+2 <= studyLength}: sph[d,r] + sph[d+1,r] + sph[d+2,r] <= 1;
+    RestPeriodSph {d in 1.. studyLength - 2, r in sphSet}:sum{i in d..d+2} sph[i,r] <= 1;
     RestPeriodVgh {d in daySet, r in vghSet: d+2 <= studyLength}: vgh[d,r] + vgh[d+1,r] + vgh[d+2,r] <= 1;
-
     
     # the amount of people on per shift. 2 on weekends, 3 on weekdays 
     WeekendShiftsSph {d in weekendSet}: sum{r in sphSet}sph[d,r] = 2;
@@ -84,24 +89,23 @@
     WeekdayShiftsVgh {d in weekdaySet}: sum{r in vghSet}vgh[d,r] = 3;
     WeekdayShiftsSph {d in weekdaySet}: sum{r in sphSet}sph[d,r] = 3;
 
-    # changed these from <=1 to =1 at Shan's request on 23 Mar 2015
-    # this will not allow Seniors to cover Junior shifts 
-    JrShiftsSph {d in daySet}: sum{r in sphJrSet} sph[d,r] = 1;
-    JrShiftsVgh {d in daySet}: sum{r in vghJrSet} vgh[d,r] = 1;
+    
+    # we will allow Seniors to cover Junior shifts, but the objective function will penalize it
+    JrShiftsSph {d in daySet}: sum{r in sphJrSet} sph[d,r] <= 1;
+    JrShiftsVgh {d in daySet}: sum{r in vghJrSet} vgh[d,r] <= 1;
     
     offSiteWeekendShifts {r in offsiteSet}: sum{d in weekendSet}(sph[d,r] + vgh[d,r]) <= 1;    
     offSiteWeekdayShifts {r in offsiteSet}: sum{d in weekdaySet}(sph[d,r] + vgh[d,r]) = 0;
-    #offSiteWeekdayShifts {r in offsiteSet}: sum{d in weekdaySet}(sph[d,r] + vgh[d,r]) <= 1;
-    #offSiteTotalShifts {r in offsiteSet}: sum{d in daySet}(sph[d,r] + vgh[d,r]) <=1;
 
     MaxWeekendShiftsVgh {r in vghSet}:sum{d in weekendSet} vgh[d,r] <= maxWeekendShifts;
     MaxWeekendShiftsSph {r in sphSet}:sum{d in weekendSet} sph[d,r] <= maxWeekendShifts;
-        
+      
     MaxMonthlyShiftsSph {r in sphOnSiteSet}:sum{d in daySet}sph[d,r] <= maxMonthlyShifts;
-    MinMonthlyShiftsSph {r in sphOnSiteSet}:sum{d in daySet}sph[d,r] >= minMonthlyShifts;
-    
     MaxMonthlyShiftsVgh {r in vghOnSiteSet}:sum{d in daySet}vgh[d,r] <= maxMonthlyShifts;
+
+
     MinMonthlyShiftsVgh {r in vghOnSiteSet}:sum{d in daySet}vgh[d,r] >= minMonthlyShifts;
+    MinMonthlyShiftsSph {r in sphOnSiteSet}:sum{d in daySet}sph[d,r] >= minMonthlyShifts;
 
 # person-specific constraints 
 # this is the bulk holiday schedule that is pasted below
@@ -110,8 +114,21 @@
     CallRequestsSph {d in daySet, r in sphSet}: sph[d,r] <= vacay_restrictions[d,r];
 
    # they are on at vgh so should already be zeroed in sph schedule 
-   aiza: sph[18,34] + vgh[18,34] = 1;
+   aiza: sph[18,35] = 1;
+
 
 
  solve;
+display onCallShifts;
+
+/*
+   display offsiteSet;
+   display vghOnSiteSet;
+   display vghOnSiteSrSet;
+   display  sphOnSiteSet;
+   display sphOnSiteSrSet;
+*/
+
+
+
  end;
